@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prompt Writer"
+  short_description: "Write copy-ready execution prompts from planning docs."
+  default_prompt: "Use this skill to turn my planning documents and task requirements into a high-quality, copy-ready staged execution prompt document."
