@@ -1,0 +1,7 @@
+interface:
+  display_name: "PPT Creator Pan"
+  short_description: "把文档稳妥做成高质量可编辑PPT的五阶段工作流"
+  default_prompt: "Use $ppt-createrskill-pan to turn my source materials into a high-quality, mostly editable PPT/PPTX with the five-stage workflow."
+
+policy:
+  allow_implicit_invocation: true
