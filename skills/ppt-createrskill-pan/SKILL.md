@@ -1,6 +1,15 @@
 ---
 name: ppt-createrskill-pan
-description: Use when the user wants to turn PDFs, Word documents, reports, papers, company documents, screenshots, or mixed source materials into a high-quality, mostly editable PPT/PPTX. Follow a five-stage workflow: content and data grounding, page implementation contract, visual asset specification, native PPT build, and final fidelity review. Prefer presentations for slide construction, spreadsheets for data grounding, and imagegen only for local visual assets rather than full-page slide generation.
+description: >-
+  Use when the user wants to turn PDFs, Word documents, reports, papers,
+  company documents, screenshots, or mixed source materials into a high-quality,
+  mostly editable PPT/PPTX. Follow a five-stage workflow: content and data
+  grounding, page implementation contract, visual asset specification, native
+  PPT build, OfficeCLI render/structure QA, and final fidelity review. Prefer
+  presentations for slide construction, spreadsheets for data grounding,
+  imagegen only for local visual assets, and officecli for PPTX inspection,
+  render preview, issue detection, object-path定位与局部修复.
+
 ---
 
 # PPT Creator Skill Pan
@@ -35,25 +44,29 @@ description: Use when the user wants to turn PDFs, Word documents, reports, pape
 - `presentations`：负责 PPT 原生对象层，包括文本框、形状、表格、原生图表、版式骨架、页面结构与最终 `pptx`
 - `spreadsheets`：负责数据语义层，包括字段整理、公式、指标口径、数据表、图表数据源、表格底稿与数据一致性检查
 - `imagegen / Image2`：只负责局部视觉资产层，包括封面视觉、章节页背景、局部插画、复杂纹理、照片合成、少量复杂示意资产；不负责默认整页成稿
+- `officecli`：负责交付后的 PPTX 结构读取、渲染预览、问题检查、对象路径定位与局部修复；不负责替代页面设计，不绕过 `presentations` / `spreadsheets` / `imagegen` 的分工，不把页面修复成整页图片
 
 一句话分工：
 
 - `presentations` 管“页”
 - `spreadsheets` 管“数”
 - `imagegen` 管“局部视觉资产”
+- `officecli` 管“看、查、定位、修小处”
 
 ## Compatibility
 
 最佳使用环境：
 
 - 当前 Codex 运行环境同时具备 `presentations`、`spreadsheets`、`imagegen / Image2`
+- 若已安装 `officecli`，必须把它用于 Stage 4/5 的渲染 QA、结构审计和局部修复闭环
 
 兼容性说明：
 
 - 如果缺少 `presentations`，这个 skill 仍可用于前 3 个阶段的分析、规划和视觉资产规格制定，但无法稳定完成原生可编辑 `pptx` 交付
 - 如果缺少 `spreadsheets`，这个 skill 仍可制作非强数据型 PPT，但数据表、公式、指标口径、原生图表数据源的稳定性会下降
 - 如果缺少 `imagegen`，这个 skill 仍可完成主要信息可编辑的 PPT，只是局部视觉资产的丰富度和风格表现会受限
-- 因此，别人下载后一般可以使用这套工作流，但若要完整发挥效果，目标环境最好具备以上三类能力
+- 如果缺少 `officecli`，这个 skill 仍可交付 PPTX，但必须用其他可用方式完成渲染预览、对象检查和真实打开验证；不得跳过最终 QA
+- 因此，别人下载后一般可以使用这套工作流，但若要完整发挥效果，目标环境最好具备以上四类能力
 
 ## Confirmation Policy
 
@@ -82,6 +95,7 @@ description: Use when the user wants to turn PDFs, Word documents, reports, pape
 8. 未经数据底稿证实的数字、比例、时间序列和图表数据，不得伪装成正式权威原生图表
 9. 机制图、流程图、结构示意图等必须核对节点、箭头、层级、术语和图例含义，不能只看起来“像对”
 10. 最终交付前必须进行一次真实打开验证，至少在 PowerPoint 或 WPS 其中一种中实际打开检查
+11. 如果 `officecli` 可用，最终交付前必须至少执行一次 `officecli view issues` 和一次渲染预览；发现可定位问题时优先用对象级局部修复，而不是重做整页
 
 ## Operating Workflow
 
@@ -192,6 +206,50 @@ description: Use when the user wants to turn PDFs, Word documents, reports, pape
 - 字体落实清单
 - 机制图 / 示意图语义核对清单
 
+#### Stage 4.5: OfficeCLI render QA and targeted repair loop
+
+适用条件：`officecli` 已安装或可用。
+
+目标：
+
+- 让 Codex 能“看见”真实渲染结果，并把排版问题定位到具体 slide / shape / table / chart
+- 在不破坏可编辑性的前提下做小范围修复，而不是整页重生成或整页图片化
+
+建议命令：
+
+```bash
+officecli validate deck.pptx
+officecli view deck.pptx issues --json
+officecli view deck.pptx stats --json
+officecli view deck.pptx html -o preview.html --json
+# 若环境具备 Chrome/Edge/Chromium/Firefox 或 Playwright，再生成 PNG 截图：
+officecli view deck.pptx screenshot --grid auto -o preview-contact-sheet.png --json
+officecli get deck.pptx / --depth 2 --json
+```
+
+若命令语法不确定，先运行 `officecli help`、`officecli help pptx` 或 `officecli help pptx shape`，不要猜参数。
+
+必须检查并记录：
+
+- `slide_id` / `page_id`
+- 可定位对象路径，例如 `/slide[3]/shape[@id=...]`
+- 问题类型：文字溢出、压线、贴边、重叠、对齐异常、图表标签不可读、表格拥挤、图片过裁、页脚页码错误、整页图片化风险
+- 修复动作：移动、缩放、改内边距、改字号、调整层级、调整容器尺寸、重新裁切局部资产、拆分信息块
+
+修复规则：
+
+- 优先使用 `officecli get/query/set` 对已定位对象做局部修复
+- 修复后只重渲染受影响页面并复查
+- 不要用 OfficeCLI 替代 Stage 1-4 的设计决策；OfficeCLI 只做检查、定位和局部修理
+- 不要把可编辑的标题、正文、表格、图表、标签改成图片
+- 如果 OfficeCLI 渲染结果与 PowerPoint/WPS 真实打开结果冲突，以真实打开结果为最终验收依据，并记录差异
+
+必须产出：
+
+- OfficeCLI 检查摘要：validate / issues / stats / HTML 预览结果；若环境支持，再包含 screenshot 结果
+- 修复清单：对象路径、问题、修改动作、复查结果
+- 未修复限制：无法自动定位、需人工审美确认、或需要 PowerPoint/WPS 真实打开确认的事项
+
 ### Stage 5: Final fidelity polish and hard acceptance
 
 目标：
@@ -204,6 +262,7 @@ description: Use when the user wants to turn PDFs, Word documents, reports, pape
 - 图表、表格、数字页与数据底稿的一致性
 - 字体集、替代链、换行结果、预览结果的一致性
 - 流程图、机制图、结构示意图和复杂信息图的语义正确性
+- OfficeCLI 渲染 QA：`validate`、`view issues`、`view stats`、HTML 预览；若环境支持，再生成逐页截图或 contact sheet；记录对象路径定位与局部修复
 - 真实打开验证：repair / 修复提示、不可读内容删除、对象丢失、字体替换、版式漂移
 - 所有容器类版式是否存在文字越界、压线、贴边或背景框错位
 - 所有源材料截取类资产是否既去除了污染区域，又保留了标题、图例、坐标轴、标签、注释和必要留白，不得因净化而过裁
@@ -215,6 +274,7 @@ description: Use when the user wants to turn PDFs, Word documents, reports, pape
 - 主要标题、正文、关键词、数字、页码、图例、表格文字、图表标签可编辑
 - 禁止整页图片化的页型没有被整页图片化
 - 没有明显错位、乱码、重影、溢出、缺字、错误页码或比例异常
+- 若 `officecli` 可用，OfficeCLI 检查摘要和修复清单已完成，且修复后预览已复查
 - 数据口径一致
 - 复杂视觉资产使用范围合理
 - 视觉近似图表已被明确标注
@@ -233,6 +293,7 @@ description: Use when the user wants to turn PDFs, Word documents, reports, pape
   - 哪些内容是局部视觉资产
   - 哪些数据或图表为视觉近似
   - 哪些字体用了替代链
+  - OfficeCLI 检查与局部修复结果如何
   - 真实打开验证结果如何
   - 还存在哪些限制
 
